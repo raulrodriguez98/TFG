@@ -1,0 +1,20 @@
+{
+  "name": "audio-backend",
+  "version": "1.0.0",
+  "description": "Backend efímero para recibir y entregar audio",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@google-cloud/speech": "^7.2.0",
+    "@google-cloud/text-to-speech": "^6.2.0",
+    "axios": "^1.11.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "form-data": "^4.0.3",
+    "google-tts-api": "^0.0.6",
+    "multer": "^2.0.1",
+    "node-fetch": "^2.7.0"
+  }
+}

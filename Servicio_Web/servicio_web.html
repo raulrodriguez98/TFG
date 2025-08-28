@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Recepción de Audio + Speech-to-Text y Text-to-Speak Respuesta Chatbot</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Reglas CSS para estilo y mejor visualización -->
+    <style>
+        /* Estilos globales y para el cuerpo */
+        body {
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background-color: #f3f4f6;
+            padding: 1rem;
+            margin: 0;
+        }
+
+        /* Estilos para el contenedor principal */
+        .container {
+            background-color: #fff;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            max-width: 28rem;
+            width: 100%;
+            text-align: center;
+        }
+
+        /* Estilos para el título principal */
+        h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #1f2937;
+            margin-bottom: 1rem;
+        }
+
+        /* Estilos para párrafos generales */
+        p {
+            color: #4b5563; 
+            margin-bottom: 0.5rem; 
+        }
+
+        /* Estilos para el área de salida de texto */
+        #output {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: #1d4ed8;
+            margin-top: 0.5rem;
+            margin-bottom: 1rem; 
+            word-break: break-word;
+        }
+
+        /* Estilos para el reproductor de audio */
+        audio {
+            width: 100%;
+            margin-top: 1rem;
+            margin-bottom: 1.5rem;
+            border-radius: 0.375rem;
+        }
+
+        /* Estilos para el botón */
+        button {
+            background-color: #3b82f6;
+            color: #fff; 
+            font-weight: 700; 
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            transition: background-color 300ms ease-in-out;
+            margin-top: 0.5rem;
+            border: none;
+            cursor: pointer;
+        }
+
+        /* Estilos para el estado hover del botón */
+        button:hover {
+            background-color: #2563eb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>🎤 Recepción y Transcripción de Audio</h2>
+        <p>Texto transcrito:</p>
+        <p id="output">Esperando audio...</p>
+        <audio id="audio-player" controls class="my-4"></audio>
+        <button id="process-button">Procesar Audio (Reproducir y Transcribir)</button>
+        <audio id="respuesta-audio" controls class="my-4"></audio>
+        <button id="reproduce-audio" onclick="reproducirRespuesta()">Reproducir respuesta de Chatbot</button>
+    </div>
+
+    <script>
+        // Función principal para procesar el audio: recibirlo del backend y luego transcribirlo
+        async function procesarAudio() {
+            document.getElementById("output").textContent = "Cargando audio para reproducción...";
+            document.getElementById("audio-player").src = ""; // Limpiar reproductor previo
+
+            try {
+                // PASO 1: Recibir el audio del backend para reproducción
+                // Se hace una solicitud GET a /api/stt para obtener el archivo audio.wav.
+                const audioResponse = await fetch("http://localhost:3000/api/stt");
+                if (!audioResponse.ok) {
+                    const errorText = await audioResponse.text();
+                    throw new Error(`No se encontró audio en el servidor para reproducir: ${errorText}. Asegúrate de que la app Android haya subido un audio.`);
+                }
+                const audioBlob = await audioResponse.blob();
+
+                // Reproducir el audio en el elemento <audio>
+                const audioUrl = URL.createObjectURL(audioBlob);
+                document.getElementById("audio-player").src = audioUrl;
+                document.getElementById("audio-player").play();
+                console.log("Audio recibido y listo para reproducción.");
+                document.getElementById("output").textContent = "Audio reproduciéndose. Iniciando transcripción...";
+
+                // PASO 2: Iniciar la transcripción del audio ya guardado en el backend
+                // Se hace una solicitud GET a /api/transcribe.
+                // El backend se encarga de leer el archivo de audio y enviarlo a Google STT.
+                const textoTranscrito = await iniciarTranscripcionBackend();
+                document.getElementById("output").textContent = `Transcripción: ${textoTranscrito}`;
+
+            } catch (error) {
+                console.error("Error al procesar audio:", error);
+                document.getElementById("output").textContent = `Error: ${error.message}`;
+            }
+        }
+
+        // Función auxiliar para iniciar la transcripción en el backend
+        // Esta función HACE UN GET y NO ENVÍA NINGÚN BODY.
+        async function iniciarTranscripcionBackend() {
+            console.log("Solicitando transcripción al backend (GET /api/transcribe)...");
+            try {
+                const response = await fetch("http://localhost:3000/api/transcribe", {
+                    method: "GET", // Debe ser GET.
+                    headers: {
+                        "Accept": "application/json" // Respuesta JSON
+                    }
+                });
+
+                if (!response.ok) {
+                    // Intenta leer el error como JSON, si falla, usa el texto de la respuesta.
+                    const errorDetails = await response.json().catch(() => response.text());
+                    console.error("Error en la respuesta del backend durante la transcripción:", errorDetails);
+                    throw new Error(`Error del servidor al transcribir: ${typeof errorDetails === 'string' ? errorDetails : JSON.stringify(errorDetails)}`);
+                }
+
+                const result = await response.json();
+                console.log("Respuesta de transcripción del backend:", JSON.stringify(result, null, 2));
+
+                return result.transcript || "No se pudo transcribir. Intenta hablar más claro o revisa el audio.";
+
+            } catch (error) {
+                console.error("Error al solicitar transcripción al backend:", error);
+                // Proporcionar un mensaje más útil para errores de red
+                if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+                    return "Error de conexión con el servidor de transcripción. Asegúrate de que el backend esté corriendo en http://localhost:3000.";
+                }
+                return `Error en la transcripción: ${error.message}`;
+            }
+        }
+
+        // Asigna la función 'procesarAudio' al botón cuando el DOM esté completamente cargado.
+        document.addEventListener("DOMContentLoaded", () => {
+            const button = document.getElementById("process-button");
+            button.onclick = procesarAudio;
+        });
+
+        // Función para iniciar la reproducción de la respuesta del Chatbot
+        async function reproducirRespuesta() {
+            try {
+                const response = await fetch('http://localhost:3000/api/tts');
+                if (!response.ok) throw new Error("No se pudo obtener el audio de la respuesta.");
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const audioElement = document.getElementById("respuesta-audio");
+                audioElement.src = url;
+                await audioElement.play();
+                audioElement.onended = () => URL.revokeObjectURL(url);
+            } catch (error) {
+                console.error("Error al reproducir la respuesta del chatbot:", error);
+                alert("No se pudo reproducir la respuesta. Verifica el servidor.");
+            }
+        }
+
+
+        
+    </script>
+</body>
+</html>
